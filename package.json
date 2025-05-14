@@ -1,0 +1,19 @@
+{
+  "name": "playwright-ts-examples",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.15.18",
+    "dotenv": "^16.5.0",
+    "msw": "^2.8.2",
+    "typescript": "^5.8.3",
+    "zod": "^3.24.4"
+  }
+}
