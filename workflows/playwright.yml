@@ -1,0 +1,175 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
+        
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps
+
+    - name: Set Environment Variables from Vars
+      shell: pwsh
+      run: |
+        $vars = @"
+        ${{ toJson(vars) }}
+        "@
+
+        $jsonvars = $vars | ConvertFrom-Json
+        foreach($object_properties in $jsonvars.PsObject.Properties)
+        {
+            echo "$($object_properties.Name.Replace('_','__'))=$($object_properties.Value)" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Set Environment Secrets from Secrets
+      shell: pwsh
+      run: |
+        $secrets = @"
+        ${{ toJson(secrets) }}
+        "@
+
+        $jsonsecrets = $secrets | ConvertFrom-Json
+        foreach($object_properties in $jsonsecrets.PsObject.Properties)
+        {
+            echo "$($object_properties.Name.Replace('_','__'))=$($object_properties.Value)" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Set Default Test Configuration
+      run: |
+        echo "NODE_ENV=test" >> $GITHUB_ENV
+        echo "HEADLESS=true" >> $GITHUB_ENV
+        echo "SCREENSHOT_ON_FAILURE=true" >> $GITHUB_ENV
+        echo "RETRY_COUNT=3" >> $GITHUB_ENV
+        echo "TIMEOUT=30000" >> $GITHUB_ENV
+        echo "BROWSER=chromium" >> $GITHUB_ENV
+        echo "VIEWPORT_WIDTH=1280" >> $GITHUB_ENV
+        echo "VIEWPORT_HEIGHT=720" >> $GITHUB_ENV
+
+    - name: Run Playwright tests
+      run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      env:
+        CI: true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-${{ matrix.shardIndex }}
+        path: |
+          playwright-report/
+          test-results/
+        retention-days: 30
+
+  merge-reports:
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: playwright-report-*
+        path: all-reports
+        merge-multiple: true
+
+    - name: Merge reports
+      run: npx playwright merge-reports ./all-reports/
+
+    - name: Upload merged report
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-merged-report
+        path: |
+          playwright-report/
+          test-results/
+        retention-days: 30
+
+  notify:
+    needs: merge-reports
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set Environment Secrets for Notification
+      shell: pwsh
+      run: |
+        $secrets = @"
+        ${{ toJson(secrets) }}
+        "@
+
+        $jsonsecrets = $secrets | ConvertFrom-Json
+        foreach($object_properties in $jsonsecrets.PsObject.Properties)
+        {
+            echo "$($object_properties.Name.Replace('_','__'))=$($object_properties.Value)" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Send notification
+      if: always()
+      uses: slackapi/slack-github-action@v1.25.0
+      with:
+        payload: |
+          {
+            "text": "🎭 Playwright Test Run Complete\nStatus: ${{ needs.merge-reports.result }}\nWorkflow: ${{ github.workflow }}\nRun: ${{ github.run_number }}\nTrigger: ${{ github.event_name }}"
+          }
+
+  publish-report:
+    needs: merge-reports
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Download merged report
+      uses: actions/download-artifact@v4
+      with:
+        name: playwright-merged-report
+        path: playwright-report
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: playwright-report
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
