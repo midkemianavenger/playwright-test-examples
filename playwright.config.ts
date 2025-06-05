@@ -63,6 +63,19 @@ export default defineConfig({
       testMatch: 'wholeTestFilename.setup.ts'
     },
 
+    // Smoke Test Projects
+    {
+      name: 'Smoke_Test',
+      testMatch: [
+        '**/*theseAreSomeTests.test.ts'
+      ],
+      use: { 
+        ...devices['Desktop Chrome'],
+        userAgent: 'exampleUserAgent' 
+      },
+      dependencies: process.env.CI ? [] : ['Smoke_Setup']
+    },
+
     /* Test against mobile viewports. */
     // {
     //   name: 'Mobile Chrome',
