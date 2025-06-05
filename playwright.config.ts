@@ -29,6 +29,7 @@ export default defineConfig({
   ] : [
     ['list'],
     [`html`, {outputFolder: `./report-html/`, open: "never" }],
+    /* testRailReporter.ts is the file that is used to know how to run the report that is generated this will be different based on your setup in this example output is a xml file */
     ['./utilities/testRailReporter.ts', {outputFile: 'xml-report/tr_results.xml', open: "never" }].
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
